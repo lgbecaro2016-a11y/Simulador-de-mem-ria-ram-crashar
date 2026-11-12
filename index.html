@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador de Estresse de Memória (Out of Memory)</title>
+  <style>
+    :root {
+      --bg-color: #0b1622;
+      --card-bg: #162638;
+      --accent-blue: #0070d1;
+      --hover-blue: #005fb8;
+      --text-main: #ffffff;
+      --text-muted: #8fa3bf;
+      --border-color: #1b4965;
+      --alert-bg: #2b1616;
+      --alert-border: #ff4444;
+      --alert-text: #ffcccc;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      color: var(--accent-blue);
+      font-size: 1.8rem;
+      margin-bottom: 5px;
+    }
+
+    p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 650px;
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      box-sizing: border-box;
+    }
+
+    .metricas-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .metrica-card {
+      background: rgba(0, 0, 0, 0.25);
+      padding: 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .metrica-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .metrica-valor {
+      font-size: 1.1rem;
+      font-weight: bold;
+      font-family: monospace;
+    }
+
+    .botoes-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      background-color: var(--accent-blue);
+      color: var(--text-main);
+      border: none;
+      padding: 14px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    button:hover {
+      background-color: var(--hover-blue);
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    button.btn-danger {
+      background-color: #a82020;
+    }
+
+    button.btn-danger:hover {
+      background-color: #c93232;
+    }
+
+    .btn-full {
+      grid-column: span 2;
+    }
+
+    .caixa-log {
+      background-color: #0d1b2a;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      min-height: 120px;
+      max-height: 200px;
+      overflow-y: auto;
+      text-align: left;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .caixa-log.erro {
+      background-color: var(--alert-bg);
+      border-color: var(--alert-border);
+      color: var(--alert-text);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Memory Stress Test</h1>
+    <p>Simulador de alocação contínua de Heap e monitoramento de exceções</p>
+  </header>
+
+  <div class="container">
+    <div class="metricas-grid">
+      <div class="metrica-card">
+        <span class="metrica-label">Blocos Alocados</span>
+        <span class="metrica-valor" id="val-blocos">0</span>
+      </div>
+      <div class="metrica-card">
+        <span class="metrica-label">Heap Estimado</span>
+        <span class="metrica-valor" id="val-heap">0 MB</span>
+      </div>
+    </div>
+
+    <div class="botoes-grid">
+      <button onclick="iniciarEstresse()">Iniciar Alocação</button>
+      <button class="btn-danger" onclick="pararEstresse()">Parar Teste</button>
+      <button class="btn-full" onclick="limparTudo()">Reiniciar Estado</button>
+    </div>
+
+    <div class="caixa-log" id="caixa-log">
+      > Sistema pronto. Clique em "Iniciar Alocação" para começar o teste de estresse.
+    </div>
+  </div>
+
+  <script>
+    let intervaloId = null;
+    let acumuladorMemoria = [];
+    let contadorBlocos = 0;
+
+    function iniciarEstresse() {
+      if (intervaloId !== null) return;
+
+      const logBox = document.getElementById("caixa-log");
+      logBox.classList.remove("erro");
+      logBox.innerHTML += "<br>> Iniciando rotina de alocação de memória...";
+
+      intervaloId = setInterval(() => {
+        try {
+          // Cria blocos grandes de dados de forma iterativa (aprox. 40MB por ciclo)
+          const blocoPesado = new Array(5000000).fill(Math.random());
+          acumuladorMemoria.push(blocoPesado);
+          contadorBlocos++;
+
+          document.getElementById("val-blocos").innerText = contadorBlocos;
+          
+          if (performance.memory) {
+            const usadoMB = Math.round(performance.memory.usedJSHeapSize / (1024 * 1024));
+            document.getElementById("val-heap").innerText = usadoMB + " MB";
+          } else {
+            document.getElementById("val-heap").innerText = "~" + (contadorBlocos * 40) + " MB";
+          }
+
+        } catch (erro) {
+          pararEstresse();
+          logBox.classList.add("erro");
+          logBox.innerHTML += `<br>> [ERRO CRÍTICO]: Limite de memória atingido!<br>> Detalhe: ${erro.message}<br>> Referência: 0x10000010101 (Out of Memory)`;
+        }
+      }, 40);
+    }
+
+    function pararEstresse() {
+      if (intervaloId !== null) {
+        clearInterval(intervaloId);
+        intervaloId = null;
+        const logBox = document.getElementById("caixa-log");
+        logBox.innerHTML += "<br>> Teste interrompido.";
+      }
+    }
+
+    function limparTudo() {
+      pararEstresse();
+      acumuladorMemoria = [];
+      contadorBlocos = 0;
+      document.getElementById("val-blocos").innerText = "0";
+      document.getElementById("val-heap").innerText = "0 MB";
+      
+      const logBox = document.getElementById("caixa-log");
+      logBox.classList.remove("erro");
+      logBox.innerHTML = "> Estado reiniciado.";
+    }
+  </script>
+
+</body>
+</html>
+
